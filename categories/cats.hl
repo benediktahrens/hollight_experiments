@@ -1,0 +1,711 @@
+let SRC = new_definition
+  `SRC (a:A,b:B,a':A) = a`;;
+
+let TGT = new_definition
+  `TGT (a:A,b:B,a':A) = a'`;;
+
+
+let CAT = new_definition
+  `CAT (ob:A->bool,ar:A#B#A->bool,comp:A#B#A->A#B#A->A#B#A->bool) <=>
+     (!s f t. (s,f,t) IN ar ==> s IN ob) /\
+     (!s f t. (s,f,t) IN ar ==> t IN ob) /\
+     (!x y z f g. (x,f,y) IN ar /\ (y,g,z) IN ar ==>
+        (?!h. comp (x,f,y) (y,g,z) h) /\
+        (!h. comp (x,f,y) (y,g,z) h ==> h IN ar /\ SRC h = x /\ TGT h = z)) /\
+     (!x. x IN ob ==>
+          (?!id. (x,id,x) IN ar /\
+                 (!y f. (x,f,y) IN ar ==> comp (x,id,x) (x,f,y) (x,f,y)) /\
+                 (!y f. (y,f,x) IN ar ==> comp (y,f,x) (x,id,x) (y,f,x)))) /\
+     (!x y z w f g h fg gh fgh.
+            comp (x,f,y) (y,g,z) (x,fg,z) /\ comp (y,g,z) (z,h,w) (y,gh,w)
+            ==> (comp (x,f,y) (y,gh,w) (x,fgh,w) <=>
+                comp (x,fg,z) (z,h,w) (x,fgh,w)))`;;
+
+
+let cat_TYBIJ = new_type_definition "cat" ("mk_cat","dest_cat")
+  (prove
+    (`?C:(A->bool)#(A#B#A->bool)#(A#B#A->A#B#A->A#B#A->bool). CAT C`,
+     REWRITE_TAC[EXISTS_PAIR_THM] THEN EXISTS_TAC `{}:A->bool` THEN
+     EXISTS_TAC `{}:A#B#A->bool` THEN
+     EXISTS_TAC `\f:A#B#A g:A#B#A fg:A#B#A. F` THEN
+     REWRITE_TAC[CAT; NOT_IN_EMPTY]));;
+
+let OBJ = new_definition
+  `OBJ C = FST (dest_cat C)`;;
+
+let AR = new_definition
+  `AR C = FST (SND (dest_cat C))`;;
+
+let COMP = new_definition
+  `COMP C = SND (SND (dest_cat C))`;;
+
+
+let CAT_LEMMA = prove
+  (`!C. CAT (dest_cat C)`,
+   MESON_TAC[cat_TYBIJ]);;
+
+
+let FORALL_CAT_THM = prove
+  (`!P. (!C:(A,B)cat. P C) <=> (!ob ar comp. CAT (ob,ar,comp) ==> P (mk_cat (ob,ar,comp)))`,
+   GEN_TAC THEN EQ_TAC THEN DISCH_TAC THENL
+   [ASM_REWRITE_TAC[]; ALL_TAC] THEN
+   GEN_TAC THEN
+   SUBST1_TAC(GSYM (ISPEC `C:(A,B)cat` (CONJUNCT1 cat_TYBIJ))) THEN
+   SUBGOAL_THEN `?ob ar comp. dest_cat (C:(A,B)cat) = (ob,ar,comp)` STRIP_ASSUME_TAC THENL
+   [MESON_TAC[PAIR_SURJECTIVE];
+    ASM_MESON_TAC[cat_TYBIJ]]);;
+
+let DEST_CAT_MK_CAT = prove
+  (`!C. CAT C ==> dest_cat (mk_cat C) = C`,
+   MESON_TAC[cat_TYBIJ]);;
+
+
+let CAT_THM = prove
+  (`!C:(A,B)cat. (!s f t. (s,f,t) IN (AR C) ==> s IN (OBJ C)) /\
+     (!s f t. (s,f,t) IN (AR C) ==> t IN (OBJ C)) /\
+     (!x y z f g. (x,f,y) IN (AR C) /\ (y,g,z) IN (AR C) ==>
+        (?!h. COMP C (x,f,y) (y,g,z) h) /\
+        (!h. COMP C (x,f,y) (y,g,z) h ==> h IN (AR C) /\ SRC h = x /\ TGT h = z)) /\
+     (!x. x IN (OBJ C) ==>
+          (?!id. (x,id,x) IN (AR C) /\
+                 (!y f. (x,f,y) IN (AR C) ==> COMP C (x,id,x) (x,f,y) (x,f,y)) /\
+                 (!y f. (y,f,x) IN (AR C) ==> COMP C (y,f,x) (x,id,x) (y,f,x)))) /\
+     (!x y z w f g h fg gh fgh.
+            COMP C (x,f,y) (y,g,z) (x,fg,z) /\ COMP C (y,g,z) (z,h,w) (y,gh,w)
+            ==> (COMP C (x,f,y) (y,gh,w) (x,fgh,w) <=>
+                COMP C (x,fg,z) (z,h,w) (x,fgh,w)))`,
+   SIMP_TAC[FORALL_CAT_THM; AR; OBJ; COMP; DEST_CAT_MK_CAT] THEN
+   REWRITE_TAC[CAT]);;
+
+let ID_DEF = define
+`ID C x = @id. (x,id,x) IN (AR C) /\
+     (!y f. (x,f,y) IN (AR C) ==> COMP C (x,id,x) (x,f,y) (x,f,y)) /\
+     (!y f. (y,f,x) IN (AR C) ==> COMP C (y,f,x) (x,id,x) (y,f,x))`;;
+
+let ID_THM = prove
+  (`!C:(A,B)cat x. x IN OBJ C ==>
+    (x,ID C x,x) IN (AR C) /\
+     (!y f. (x,f,y) IN (AR C) ==> COMP C (x,ID C x,x) (x,f,y) (x,f,y)) /\
+     (!y f. (y,f,x) IN (AR C) ==> COMP C (y,f,x) (x,ID C x,x) (y,f,x))`,
+     GEN_TAC THEN
+     GEN_TAC THEN
+     DISCH_TAC THEN
+     REWRITE_TAC [ID_DEF] THEN
+     SELECT_ELIM_TAC THEN
+     STRIP_ASSUME_TAC (ISPEC `C:(A,B)cat` CAT_THM) THEN
+     ASM_MESON_TAC[]);;
+
+let CAT_EXISTS_UNIQUE_ID = prove
+  (`!C:(A,B)cat x.
+      x IN (OBJ C) ==>
+      (?!id. (x,id,x) IN (AR C) /\
+             (!y f. (x,f,y) IN (AR C) ==> COMP C (x,id,x) (x,f,y) (x,f,y)) /\
+             (!y f. (y,f,x) IN (AR C) ==> COMP C (y,f,x) (x,id,x) (y,f,x)))`,
+   REWRITE_TAC[CAT_THM]);;
+
+let CAT_EXISTS_ID = prove
+  (`!C:(A,B)cat x.
+      x IN (OBJ C) ==>
+      (?id. (x,id,x) IN (AR C) /\
+            (!y f. (x,f,y) IN (AR C) ==> COMP C (x,id,x) (x,f,y) (x,f,y)) /\
+            (!y f. (y,f,x) IN (AR C) ==> COMP C (y,f,x) (x,id,x) (y,f,x)))`,
+   MESON_TAC[CAT_EXISTS_UNIQUE_ID]);;
+
+let CAT_UNIQUE_ID = prove
+  (`!C:(A,B)cat x id id'.
+      x IN (OBJ C) /\
+      (x,id,x) IN (AR C) /\
+      (!y f. (x,f,y) IN (AR C) ==> COMP C (x,id,x) (x,f,y) (x,f,y)) /\
+      (!y f. (y,f,x) IN (AR C) ==> COMP C (y,f,x) (x,id,x) (y,f,x)) /\
+      (x,id',x) IN (AR C) /\
+      (!y f. (x,f,y) IN (AR C) ==> COMP C (x,id',x) (x,f,y) (x,f,y)) /\
+      (!y f. (y,f,x) IN (AR C) ==> COMP C (y,f,x) (x,id',x) (y,f,x))
+      ==> id = id'`,
+   REPEAT STRIP_TAC THEN
+   MP_TAC (SPECL [`C:(A,B)cat`; `x:A`] CAT_EXISTS_UNIQUE_ID) THEN
+   ASM_REWRITE_TAC[EXISTS_UNIQUE_THM] THEN STRIP_TAC THEN
+   POP_ASSUM MATCH_MP_TAC THEN ASM_SIMP_TAC[]);;
+
+let ID_UNIQUE_THM = prove
+  (`!C:(A,B)cat x f. x IN (OBJ C) ==>
+        (f = ID C x <=>
+             (x,f,x) IN (AR C) /\
+             (!y g. (x,g,y) IN (AR C) ==> COMP C (x,f,x)(x,g,y)(x,g,y)) /\
+             (!y g. (y,g,x) IN (AR C) ==> COMP C (y,g,x)(x,f,x)(y,g,x)))`,
+   REPEAT STRIP_TAC THEN MP_TAC (ISPECL [`C:(A,B)cat`;`x:A`] ID_THM) THEN
+   ASM_REWRITE_TAC[] THEN STRIP_TAC THEN EQ_TAC THEN ASM_SIMP_TAC[] THEN
+   STRIP_TAC THEN MATCH_MP_TAC CAT_UNIQUE_ID THEN EXISTS_TAC `C:(A,B)cat` THEN
+   EXISTS_TAC `x:A` THEN ASM_SIMP_TAC[]);;
+
+let ID_ID = prove
+  (`!C x f. x IN (OBJ C) /\
+         (x,f,x) IN (AR C) /\
+            (!y g. (x,g,y) IN (AR C) ==> COMP C (x,f,x)(x,g,y)(x,g,y)) /\
+            (!y g. (y,g,x) IN (AR C) ==> COMP C (y,g,x)(x,f,x)(y,g,x))
+    ==> f = ID C x`,
+     REPEAT GEN_TAC THEN
+     MESON_TAC [ID_UNIQUE_THM]);;
+
+let comp = define
+`comp C f g = @h. COMP C f g h` ;;
+
+type_of `comp`;;
+
+let comp_COMP = prove
+(`!C:(A,B)cat x y z f g.
+      (x,f,y) IN (AR C) /\ (y,g,z) IN (AR C) ==>
+        COMP C (x,f,y) (y,g,z)
+               (comp C (x,f,y) (y,g,z))`,
+      REPEAT GEN_TAC THEN REWRITE_TAC [comp] THEN
+      SELECT_ELIM_TAC THEN
+      MP_TAC (ISPEC `C:(A,B)cat` CAT_THM) THEN
+      MESON_TAC []);;
+
+let COMP_UNIQUE = prove
+(`!C:(A,B)cat x y z f g fg fg'.
+   (x,f,y) IN (AR C) /\ (y,g,z) IN (AR C) /\
+        COMP C (x,f,y) (y,g,z) (x,fg,z) /\
+        COMP C (x,f,y) (y,g,z) (x,fg',z) ==>
+              (x,fg,z) = (x,fg',z)`,
+    REPEAT GEN_TAC THEN
+    MP_TAC (ISPEC `C:(A,B)cat` CAT_THM) THEN
+    MESON_TAC []);;
+
+
+
+let COMP_UNIQUE2 = prove
+(`!C:(A,B)cat x y z f g fg fg'.
+   (x,f,y) IN (AR C) /\ (y,g,z) IN (AR C) /\
+        COMP C (x,f,y) (y,g,z) fg /\
+        COMP C (x,f,y) (y,g,z) fg' ==>
+              fg = fg'`,
+    REPEAT GEN_TAC THEN
+    MP_TAC (ISPEC `C:(A,B)cat` CAT_THM) THEN
+    MESON_TAC []);;
+
+
+let comp_COMP_unique = prove
+(`!C:(A,B)cat x y z f g fg.
+    (x,f,y) IN (AR C) /\ (y,g,z) IN (AR C) /\
+        COMP C (x,f,y) (y,g,z) (x,fg,z) ==>
+               (x,fg,z) = comp C (x,f,y) (y,g,z)`,
+       REPEAT GEN_TAC THEN
+       MESON_TAC [COMP_UNIQUE2; comp_COMP]);;
+
+
+
+let comp_IN_AR = prove
+(`!C:(A,B)cat f g. f IN (AR C) /\ g IN (AR C) /\
+          SRC g = TGT f
+      ==> comp C f g IN (AR C)`,
+   GEN_TAC THEN
+   REWRITE_TAC [FORALL_PAIR_THM] THEN
+   MAP_EVERY X_GEN_TAC [`a:A`; `f:B`; `b:A`; `c:A`; `g:B`; `d:A`] THEN
+   REWRITE_TAC [SRC;TGT] THEN
+   REPEAT STRIP_TAC THEN
+   POP_ASSUM SUBST_ALL_TAC THEN
+   ASM_MESON_TAC [CAT_THM; comp_COMP]);;
+
+let comp_SRC_TGT = prove
+(`!C:(A,B)cat x y z f g fg.
+    (x,f,y) IN (AR C) /\ (y,g,z) IN (AR C)
+    ==> SRC (comp C (x,f,y) (y,g,z)) = x /\
+        TGT (comp C (x,f,y) (y,g,z)) = z`,
+    REPEAT GEN_TAC THEN
+    MP_TAC (ISPEC `C:(A,B)cat` CAT_THM) THEN
+    MESON_TAC [comp_COMP]);;
+
+
+
+(* MM: Better definition of SRC:
+  1. Gives more type constrants.
+  2. Rewrites only terms of the form SRC (x,f,y) (never introduces FST).
+
+let SRC = new_definition
+  `SRC (a:A,f:B,b:A) = a`;;
+ *)
+
+
+let comp_SRC_TGT2 = prove
+(`!C:(A,B)cat f g.
+    f IN (AR C) /\ g IN (AR C) /\ SRC g = TGT f
+    ==> SRC (comp C f g) = SRC f /\
+        TGT (comp C f g) = TGT g`,
+GEN_TAC THEN
+REWRITE_TAC[FORALL_PAIR_THM] THEN
+MAP_EVERY X_GEN_TAC [`a:A`; `f:B`; `b:A`; `c:A`; `g:B`; `d:A`] THEN
+(* MM: The previous tactic is equivalent to X_GEN_TAC `a:A` THEN X_GEN_TAC `f:B` THEN ... *)
+REWRITE_TAC[SRC;TGT] THEN
+(* MM: Compare the previous with REWRITE_TAC[SRC;TGT] *)
+(* Now notice that comp_SRC is not general enough to match this goal,
+   i.e. SIMP_TAC[comp_SRC] does not work here.
+   We can easly remedy to this problem by replacing c with b as follows. *)
+STRIP_TAC THEN POP_ASSUM SUBST_ALL_TAC THEN
+(* Finally we can use SIMP. *)
+ASM_SIMP_TAC[comp_SRC_TGT]);;
+
+let COMP_SRC_TGT = prove
+(`!C:(A,B)cat a b c f g x y gh.
+    a,f,b IN (AR C) /\ b,g,c IN (AR C) /\
+     COMP C (a,f,b) (b,g,c) (x,fg,y) ==>
+       x = a /\ y = c`,
+REPEAT GEN_TAC THEN
+MESON_TAC [CAT_THM; SRC; TGT]);;
+
+
+let comp_COMP_unique2 = prove
+(`!C:(A,B)cat f g fg.
+    f IN (AR C) /\ g IN (AR C) /\ SRC g = TGT f /\
+        COMP C f g fg ==>
+               fg = comp C f g`,
+GEN_TAC THEN
+REWRITE_TAC [FORALL_PAIR_THM] THEN
+MAP_EVERY X_GEN_TAC [`a:A`; `f:B`; `b:A`; `c:A`; `g:B`; `d:A`;`r:A`;`k:B`;`s:A`] THEN
+REWRITE_TAC [SRC;TGT] THEN
+REPEAT STRIP_TAC THEN
+FIRST_X_ASSUM SUBST_ALL_TAC THEN
+SUBGOAL_THEN `r = a:A` SUBST_ALL_TAC THENL [
+  ASM_MESON_TAC [COMP_SRC_TGT];
+  SUBGOAL_THEN `s = d:A` SUBST_ALL_TAC THENL [
+    ASM_MESON_TAC [COMP_SRC_TGT];
+    ASM_MESON_TAC [comp_COMP_unique]]]);;
+
+
+
+
+let comp_ASSOC = prove
+(`!C:(A,B)cat f g h. 
+     f IN (AR C) /\ g IN (AR C) /\ h IN (AR C) /\
+     SRC g = TGT f /\ SRC h = TGT g ==>
+     comp C (comp C f g) h = comp C f (comp C g h)`,
+GEN_TAC 
+REWRITE_TAC [FORALL_PAIR_THM]
+MAP_EVERY X_GEN_TAC [`a:A`;`f:B`;`b:A`;`c:A`;`g:B`;`d:A`;`x:A`;`h:B`;`y:A`]
+REWRITE_TAC [SRC;TGT]
+REPEAT STRIP_TAC
+REPEAT (POP_ASSUM SUBST_ALL_TAC)
+GEN_REWRITE_TAC (LAND_CONV) [comp]
+MATCH_MP_TAC SELECT_UNIQUE
+REWRITE_TAC [FORALL_PAIR_THM]
+MAP_EVERY X_GEN_TAC [`r:A`;`k:B`;`s:A`] THEN 
+EQ_TAC THEN STRIP_TAC
+MATCH_MP_TAC comp_COMP_unique2
+ASM_SIMP_TAC [comp_SRC_TGT;TGT;SRC;comp_IN_AR] 
+MP_TAC (ISPEC `C:(A,B)cat` CAT_THM) THEN
+ASM_MESON_TAC [comp;comp_COMP]
+
+
+SELECT_UNIQUE;;
+SELECT_ELIM_TAC
+ASM_SIMP_TAC [comp_COMP_unique]
+ASM_MESON_TAC [comp_COMP;comp_COMP_unique;comp_IN_AR;comp]
+
+
+let FUNC = new_definition
+  `!s t f:A->B.  FUNC (s,f,t) <=> (!x. x IN s ==> f x IN t)`;;
+
+let IN_FUNC = prove
+  (`!s t f:A->B. (s,f,t) IN FUNC <=> (!x. x IN s ==> f x IN t)`,
+   REWRITE_TAC[IN; FUNC]);;
+
+let IN_COD = prove
+(`! s f t x. x IN s /\ FUNC (s,f,t) ==> f x IN t`,
+REPEAT GEN_TAC THEN SIMP_TAC [FUNC]);;
+
+let COMP_IS_FUNC = prove
+ (`!r s t f g. FUNC (r,f,s) /\ FUNC (s,g,t) ==> FUNC (r,g o f,t)`,
+    REPEAT GEN_TAC THEN
+    MESON_TAC [FUNC;o_DEF]);;
+
+(* MM: When all you want is an initial "unfold", is much better to
+   rewrite before using MESON.
+   Look...  *)
+
+let COMP_IS_FUNC = prove
+ (`!r s t f g. FUNC (r,f,s) /\ FUNC (s,g,t) ==> FUNC (r,g o f,t)`,
+  REPEAT GEN_TAC THEN REWRITE_TAC[FUNC; o_THM] THEN MESON_TAC []);;
+
+
+let FUNC_COMP = new_definition
+  `FUNC_COMP (s,f,t) (t',g,u) (s',h,u') <=>
+  s=s' /\ t=t' /\ u=u' /\ FUNC (s,f,t) /\ FUNC (t,g,u) /\ g o f = h`;;
+
+let FUNC_COMP_UNIQUE = prove
+  (`!x y z f g h.
+     FUNC_COMP (x,f,y) (y,g,z) h ==> h = x,g o f,z`,
+   REPEAT GEN_TAC THEN
+     GEN_REWRITE_TAC (RAND_CONV o LAND_CONV) [GSYM PAIR] THEN
+     GEN_REWRITE_TAC (RAND_CONV o LAND_CONV o RAND_CONV) [GSYM PAIR] THEN
+     GEN_REWRITE_TAC (LAND_CONV o RAND_CONV) [GSYM PAIR] THEN
+     GEN_REWRITE_TAC (LAND_CONV o RAND_CONV o RAND_CONV) [GSYM PAIR] THEN
+     REWRITE_TAC [FUNC_COMP] THEN
+     SIMP_TAC [PAIR_EQ]);;
+
+(* MM: The above proof makes me proud of my lecture about conversions and rewriting ;-)
+   Not surprisingly, there is a more standard (and shorter) proof. *)
+
+let FUNC_COMP_UNIQUE = prove
+  (`!x y z f g h.
+     FUNC_COMP (x,f,y) (y,g,z) h ==> h = x,g o f,z`,
+    SIMP_TAC[FORALL_PAIR_THM; PAIR_EQ; FUNC_COMP]);;
+
+let FUNC_COMP_FUNC_helper = prove
+(`! x:A->bool y:B->bool z:C->bool f g h. 
+     FUNC_COMP (x,f,y) (y,g,z) h ==>
+       !a. a IN x ==> g (f a) IN z`,
+GEN_TAC THEN GEN_TAC THEN GEN_TAC THEN GEN_TAC THEN GEN_TAC THEN
+REWRITE_TAC [FORALL_PAIR_THM] THEN REPEAT GEN_TAC THEN
+REWRITE_TAC [FUNC_COMP;FUNC] THEN
+SIMP_TAC[]);;
+
+
+let FUNC_COMP_FUNC = prove
+  (`!x y z f g h.
+     FUNC_COMP (x,f,y) (y,g,z) h 
+         ==>  h IN FUNC`,
+    REPEAT STRIP_TAC THEN
+    FIRST_ASSUM (SUBST_ALL_TAC o MATCH_MP FUNC_COMP_UNIQUE) THEN
+    ASM_MESON_TAC [IN_FUNC;FUNC_COMP_FUNC_helper;o_THM]);;
+    
+      
+
+let FUN_CAT = prove
+  (`CAT ((:A->bool), FUNC, FUNC_COMP)`,
+   REWRITE_TAC[CAT; IN_UNIV; IN_FUNC; FUNC_COMP; FUNC] THEN
+     REPEAT STRIP_TAC THENL [
+
+     REWRITE_TAC [EXISTS_UNIQUE] THEN
+    EXISTS_TAC `(x:A->bool,((g:A->A) o (f:A->A)),z:A->bool)` THEN
+    ASM_SIMP_TAC [FUNC_COMP; FORALL_PAIR_THM; FUNC];
+    ASM_MESON_TAC [FUNC_COMP_FUNC]
+    (* MM: ASM_SIMP_TAC [FUNC_COMP; FORALL_PAIR_THM; FUNC] THEN
+               ASM_MESON_TAC[FUNC_COMP;COMP_IS_FUNC;FUNC;FUNC_COMP_UNIQUE] *)
+     ;
+      POP_ASSUM (fun s -> SUBST1_TAC (MATCH_MP FUNC_COMP_UNIQUE s)) THEN
+    SIMP_TAC [SRC]
+      ;
+      FIRST_ASSUM (MP_TAC o MATCH_MP FUNC_COMP_UNIQUE) THEN
+    SIMP_TAC [TGT;o_DEF]
+      ;
+      REWRITE_TAC[EXISTS_UNIQUE] THEN EXISTS_TAC `I:A->A` THEN CONJ_TAC THENL
+    [ASM_SIMP_TAC[I_THM; I_O_ID; FUN_EQ_THM; o_THM];
+        X_GEN_TAC `f:A->A`
+        ] THEN
+    SIMP_TAC[] THEN STRIP_TAC THEN
+    POP_ASSUM (MP_TAC o ISPECL [`x:A->bool`;`I:A->A`]) THEN
+    SIMP_TAC[I_THM; I_O_ID];
+
+      FIRST_X_ASSUM (SUBST1_TAC o GSYM) THEN
+    FIRST_X_ASSUM (SUBST1_TAC o GSYM) THEN
+    ASM_SIMP_TAC[o_THM; o_ASSOC]
+     ]);;
+
+
+
+let FOB = new_definition
+  `FOB = FST`;;
+
+let FMOR = new_definition
+  `FMOR = SND`;;
+
+
+let FUNCTOR = new_definition
+  `FUNCTOR (C,G,D) <=>
+  FUNC (OBJ C,FOB G,OBJ D) /\
+  (!x y f. (x,f,y) IN (AR C) ==> (FOB G x,FMOR G f, FOB G y) IN (AR D)) /\
+  (!x y z f g fg.
+     COMP C (x,f,y) (y,g,z) (x,fg,z)
+   ==> COMP D (FOB G x, FMOR G f, FOB G y)
+     (FOB G y, FMOR G g, FOB G z)
+     (FOB G x, FMOR G fg,FOB G z)) /\
+  (!c. c IN OBJ C ==> FMOR G (ID C c) = ID D (FOB G c)) `;;
+
+
+
+let FOB_FUNC = prove
+  (`! C D G. FUNCTOR (C,G,D) ==>
+     !c. c IN OBJ C ==> FOB G c IN OBJ D`,
+   REPEAT GEN_TAC THEN
+     REWRITE_TAC [FUNCTOR; FUNC] THEN
+     SIMP_TAC []);;
+
+let FID_FUNC = prove
+  (`! C D G x. FUNCTOR (C,G,D) /\ x IN OBJ C
+   ==> FOB G x,FMOR G (ID C x),FOB G x IN AR D`,
+   REPEAT GEN_TAC THEN
+     REWRITE_TAC [FUNCTOR] THEN
+     ASM_SIMP_TAC [ID_THM]);;
+
+let FID_FUNC2 = prove
+  (`!C:(A,B)cat D:(a,b)cat G x. FUNCTOR (C,G,D) /\ x IN OBJ C
+   ==> FOB G x,ID D (FOB G x),FOB G x IN AR D`,
+   REPEAT GEN_TAC THEN
+     REWRITE_TAC [FUNCTOR] THEN
+     MESON_TAC [ID_THM]);;
+
+(*let FID = prove
+  (`! (C:(A,B)cat) (D:(a,b)cat) G. FUNCTOR (C,G,D) ==>
+  !c. c IN OBJ C ==>  FMOR G (ID C c) = ID D (FOB G c)`,
+  REWRITE_TAC [FUNCTOR]
+  REPEAT STRIP_TAC
+  MATCH_MP_TAC ID_ID
+  REPEAT STRIP_TAC
+  [
+  ASM_MESON_TAC [FUNC];
+  ASM_SIMP_TAC [ID_THM];
+  FIRST_ASSUM MATCH_MP_TAC
+
+  ASM_SIMP_TAC [FUNCTOR]
+
+  ASM_REWRITE_TAC [ID_UNIQUE_THM]
+  MP_TAC (ISPECL [`D:(a,b)cat`;`(FOB G c):a`;`FMOR G (ID C c):b`] ID_UNIQUE_THM)
+  ASM_SIMP_TAC [FOB_FUNC]
+  REWRITE_TAC [ID_UNIQUE_THM]
+  SELECT_ELIM_TAC
+*)
+
+let FUNCTOR2 = new_definition
+  `FUNCTOR2 (C,(Fo,Fm),D) <=>
+   FUNC (OBJ C,Fo,OBJ D) /\
+   (!x y f. (x,f,y) IN (AR C) ==> (Fo x,Fm f, Fo y) IN (AR D)) /\
+   (!x y z f g fg.
+      COMP C (x,f,y) (y,g,z) (x,fg,z)
+      ==> COMP D (Fo x, Fm f, Fo y)
+                 (Fo y, Fm g, Fo z)
+                 (Fo x, Fm fg,Fo z))`;;
+
+let COMP_FUNCTOR = new_definition
+  ` FUNCTOR_COMP
+     (C,G,D)
+     (D',H,E')
+     (C',K,E) <=>
+   C=C' /\ D=D' /\ E=E' /\
+   FOB K = FOB H o FOB G /\
+   FMOR K = FMOR H o FMOR G`;;
+
+let COMP_FUNCTOR_UNIQUE = prove
+(`!C:(A,B)cat D:(a,b)cat E:(r,s)cat G H.
+  FUNCTOR (C,G,D) /\ FUNCTOR (D,H,E) ==>
+    !h. FUNCTOR_COMP (C,G,D)(D,H,E) h
+     ==> h = (C,(FOB H o FOB G,FMOR H o FMOR G),E)`,
+ REPEAT GEN_TAC THEN
+ STRIP_TAC THEN
+ REWRITE_TAC [FORALL_PAIR_THM] THEN
+ SIMP_TAC [COMP_FUNCTOR;FOB;FMOR;PAIR_EQ]);;
+
+
+let COMP_FUNCTOR_SRC_TGT = prove
+(`!C:(A,B)cat D:(a,b)cat E:(A,B)cat G H.
+   FUNCTOR (C,G,D) /\ FUNCTOR (D,H,E) ==>
+    !h. FUNCTOR_COMP (C,G,D)(D,H,E) h
+                    ==> SRC h = C /\ TGT h = E`,
+       REPEAT GEN_TAC THEN
+       MP_TAC (ISPECL [`C:(A,B)cat`;`D:(a,b)cat`;`E:(A,B)cat`] COMP_FUNCTOR_UNIQUE) THEN
+       SIMP_TAC [SRC;TGT]);;
+
+
+
+
+let COMP_FUNCTOR_UNIQUE2 = prove
+( `!C:(A,B)cat D:(a,b)cat E:(r,s)cat G H.
+     FUNCTOR (C,G,D) /\ FUNCTOR (D,H,E)
+         ==> ?!h. FUNCTOR_COMP (C,G,D) (D,H,E) h`,
+  REPEAT STRIP_TAC THEN
+  REWRITE_TAC [EXISTS_UNIQUE] THEN
+  EXISTS_TAC `C:(A,B)cat,(FOB (H:(a->r)#(b->s)) o FOB (G:(A->a)#(B->b)),FMOR (H:(a->r)#(b->s)) o FMOR (G:(A->a)#(B->b))),E:(r,s)cat` THEN
+  CONJ_TAC THENL [
+      REWRITE_TAC [COMP_FUNCTOR;FMOR;FOB];
+      REWRITE_TAC [FORALL_PAIR_THM] THEN
+      ASM_SIMP_TAC [COMP_FUNCTOR;FMOR;FOB] ]);;
+
+  
+let COMP_FUNCTOR_THM = prove
+(`!C:(A,B)cat D:(a,b)cat E:(r,s)cat G H GH.
+       FUNCTOR_COMP (C,G,D)(D,H,E)(C,GH,E) /\
+       FUNCTOR (C,G,D) /\ FUNCTOR(D,H,E) ==>
+       FUNCTOR (C,GH,E)`,
+   REPEAT GEN_TAC THEN
+   REWRITE_TAC [FUNCTOR; COMP_FUNCTOR] THEN
+   REPEAT STRIP_TAC THENL
+         [
+     ASM_REWRITE_TAC [] THEN ASM_MESON_TAC [COMP_IS_FUNC];
+     ASM_REWRITE_TAC [o_DEF] THEN
+     ASM_MESON_TAC[];
+     ASM_REWRITE_TAC [o_DEF] THEN
+       ASM_MESON_TAC [];
+     ASM_REWRITE_TAC [o_DEF] THEN
+     ASM_MESON_TAC [FUNC]
+         ]);;
+
+let COMP_FUNCTOR_FUNCTOR = prove
+(`!C:(A,B)cat D:(a,b)cat E:(r,s)cat G H GH.
+       FUNCTOR_COMP (C,G,D)(D,H,E) GH /\
+       FUNCTOR (C,G,D) /\ FUNCTOR(D,H,E) ==>
+       FUNCTOR GH`,
+REPEAT GEN_TAC THEN
+MESON_TAC [FORALL_PAIR_THM;COMP_FUNCTOR_UNIQUE;COMP_FUNCTOR_THM]);;
+
+let COMP_FUNCTOR_THM_notsogood = prove
+(`!C:(A,B)cat D:(a,b)cat E:(r,s)cat G H GH.
+       FUNCTOR_COMP (C,G,D)(D,H,E)(C,GH,E) /\
+       FUNCTOR (C,G,D) /\ FUNCTOR(D,H,E) ==>
+       FUNCTOR (C,GH,E)`,
+   REPEAT GEN_TAC THEN
+   REWRITE_TAC [FUNCTOR; COMP_FUNCTOR] THEN
+   REPEAT STRIP_TAC THEN ASM_REWRITE_TAC [o_DEF] THEN
+   ASM_MESON_TAC [o_DEF;FUNC;COMP_IS_FUNC]);;
+
+
+
+
+
+
+
+let ID_FUNCTOR = prove
+  (`FUNCTOR (x,((\a. a),(\b. b)), x)`,
+    REWRITE_TAC [FUNCTOR; FUNC;FOB;FMOR]);;
+
+let ID_FUNCTOR_LEFT = prove
+(`!x y f. FUNCTOR (x,f,y) ==>
+    FUNCTOR_COMP (x, ((\a. a),(\b. b)),x)(x,f,y)(x,f,y)`,
+    SIMP_TAC [COMP_FUNCTOR;FOB;FMOR; o_DEF; FUN_EQ_THM]);;
+
+let ID_FUNCTOR_RIGHT = prove
+(`!x y f. FUNCTOR (y,f,x) ==>
+   FUNCTOR_COMP  (y,f,x)(x, ((\a. a),(\b. b)),x) (y,f,x)`,
+   SIMP_TAC [COMP_FUNCTOR;FOB;FMOR; o_DEF; FUN_EQ_THM]);;
+
+
+
+let CAT_CAT = prove
+( `CAT ((\ (x:(A,B)cat).T) ,FUNCTOR, FUNCTOR_COMP)`,
+    REWRITE_TAC [CAT;IN_UNIV;IN;COMP_FUNCTOR;FOB;FMOR] THEN
+    REPEAT STRIP_TAC THENL [
+      ASM_SIMP_TAC [COMP_FUNCTOR_UNIQUE2];
+      ASM_MESON_TAC [COMP_FUNCTOR_FUNCTOR];
+      ASM_MESON_TAC [COMP_FUNCTOR_SRC_TGT];
+      ASM_MESON_TAC [COMP_FUNCTOR_SRC_TGT];
+
+      REWRITE_TAC [EXISTS_UNIQUE] THEN
+      EXISTS_TAC `(\a:A. a), (\b:B. b)` THEN
+      STRIP_TAC THENL
+         [SIMP_TAC [FUN_EQ_THM;ID_FUNCTOR;PAIR_EQ;PAIR;o_DEF];
+          REPEAT STRIP_TAC THEN
+          FIRST_X_ASSUM (MP_TAC o SPECL [`x:(A,B)cat`;`(\a:A.a),(\b:B.b)`]) THEN
+          GEN_REWRITE_TAC (RAND_CONV o LAND_CONV) [GSYM PAIR] THEN
+          SIMP_TAC [ID_FUNCTOR;FUN_EQ_THM; PAIR_EQ; PAIR;o_DEF] THEN
+          MESON_TAC []
+         ]
+       ;
+      ASM_REWRITE_TAC [] THEN
+      MESON_TAC [o_ASSOC]
+     ] );;
+
+
+
+let COMM4 = define
+ `COMM4 C (a,b) (c,d) <=>
+    comp C a b = comp C c d`;;
+
+let comp_ASSOC = prove
+(`!
+
+
+let COMM4_GLUE = prove
+(`!C:(A,B)cat f g f' g' h j k. 
+   f IN (AR C) /\ g IN (AR C) /\
+   f' IN (AR C) /\ g' IN (AR C) /\
+   h IN (AR C) /\ j IN (AR C) /\ 
+   k IN (AR C) /\
+   COMM4 C (f,j) (h,f') /\ COMM4 C (g,k) (j,g')
+    ==> COMM4 C (comp C f g,k) (h, comp C f' g')`,
+   REPEAT GEN_TAC THEN
+   REWRITE_TAC [COMM4]
+
+let COMM3 = define
+ `COMM3 C (a,b) c <=>
+    comp C a b = c`;;
+
+let NT = define
+ `NT (C,D,G,H,N) <=>
+   FUNCTOR (C,G,D) /\ FUNCTOR (C,H,D) /\
+   FUNC (OBJ C,N,AR D) /\
+   (!c. c IN (OBJ C) ==> SRC (N c) = FOB G c /\ TGT (N c) = FOB H c)/\
+   (!c d f. c,f,d IN (AR C) ==> COMM4 D (N c,(FOB H c,FMOR H f,FOB H d))
+                    ((FOB G c,FMOR G f,FOB G d),N d))`;;
+
+
+
+
+
+let IDL = prove
+(`!C:(A,B)cat c d f. c,f,d IN (AR C) ==>
+      comp C (c,ID C c,c)(c,f,d) = (c,f,d)`,
+      REPEAT STRIP_TAC THEN
+      MATCH_MP_TAC (GSYM comp_COMP_unique) THEN
+      ASM_MESON_TAC [ID_THM; CAT_THM]);;
+
+let IDR = prove
+(`!C:(A,B)cat c d f. d,f,c IN (AR C) ==>
+      comp C (d,f,c)(c,ID C c,c) = (d,f,c)`,
+      REPEAT STRIP_TAC THEN
+      MATCH_MP_TAC (GSYM comp_COMP_unique) THEN
+      ASM_MESON_TAC [ID_THM; CAT_THM]);;
+
+
+let vidNT_FUNC = prove
+  (`!C:(A,B)cat D:(a,b)cat G. FUNCTOR (C,G,D) ==>
+       FUNC (OBJ C,(\c. FOB G c,ID D (FOB G c),FOB G c),AR D)`,
+       REPEAT GEN_TAC THEN
+       REWRITE_TAC [FUNC] THEN
+       MESON_TAC [FID_FUNC2]);;
+
+let vidNT = prove
+(`! C:(A,B)cat D:(a,b)cat G. FUNCTOR (C,G,D) ==>
+           NT (C,D,G,G,(\c. (FOB G c, ID D (FOB G c),FOB G c)))`,
+           REPEAT GEN_TAC THEN
+           REWRITE_TAC [NT] THEN
+           SIMP_TAC [SRC;TGT;o_DEF;vidNT_FUNC] THEN
+           REWRITE_TAC [FUNCTOR;COMM4] THEN
+           REPEAT STRIP_TAC THEN
+           ASM_SIMP_TAC [IDL;IDR]);;
+
+type_of `NT`;;
+type_of `comp`;;
+let vcompNT = define
+`vcompNT (C,D,G,H,K,M,N,MN) <=>
+      NT (C,D,G,H,M) /\ NT (C,D,H,K,N) /\
+      !c. c IN (OBJ C) ==> MN c = comp D (M c) (N c)`;;
+
+
+
+let vcompNT_NT = prove
+(`!C:(A,B)cat D:(a,b)cat G H K M N MN.
+    vcompNT (C,D,G,H,K,M,N,MN)
+       ==>  NT(C,D,G,K,MN)`,
+   REPEAT GEN_TAC
+   REWRITE_TAC [NT;vcompNT]
+   SIMP_TAC [] THEN REPEAT STRIP_TAC THENL [
+     ASM_SIMP_TAC [FUNC] THEN
+     REPEAT STRIP_TAC THEN
+     MATCH_MP_TAC comp_IN_AR THEN
+     ASM_MESON_TAC [FUNC;IN_COD]
+     ;
+     MP_TAC (ISPECL [`D:(a,b)cat`;`M (c:A):a#b#a`;`N (c:A):a#b#a`] comp_SRC_TGT2)
+     ASM_MESON_TAC [FUNC]
+     ;
+     MP_TAC (ISPECL [`D:(a,b)cat`;`M (c:A):a#b#a`;`N (c:A):a#b#a`] comp_SRC_TGT2)
+     ASM_MESON_TAC [FUNC]
+     ;
+     ASM_SIMP_TAC []
+
+
+ASM_MEOSN
+
+comp_SRC_TGT2;;
+
+     SUBGOAL_THEN `SRC (comp D (M (c:A)) (N c)) = SRC (M c)` MP_TAC
+ ASM_MESON_TAC [comp_SRC_TGT2]
+     
+       comp_IN_AR;;
+     ASM_SIMP_TAC [FUNC;comp_IN_AR]  
